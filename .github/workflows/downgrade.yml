@@ -17,11 +17,11 @@ jobs:
       matrix:
         version: ['1.10']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/julia-downgrade-compat@v1
+      - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Pkg,TOML,InteractiveUtils,Random,LinearAlgebra,Statistics,Printf,Combinatorics,Random,PrecompileTools,SparseArrays,DelimitedFiles
       - uses: julia-actions/cache@v2
