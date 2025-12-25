@@ -103,18 +103,48 @@ function VNGraph(g::Graphs.AbstractSimpleGraph)
     return vng
 end
 
+function Graphs.outneighbors(g::VNGraph, v::Integer)
+  if !(1 <= v <= nnodes(g))
+    return eltype(g)[]
+  end
+
+  degree = g.ptr.d[][v]
+  c_neighbors_ptr = g.ptr.a[][v]
+  neighbors = Vector{eltype(g)}(undef, degree)
+  for k in 1:degree
+    neighbors[k] = c_neighbors_ptr[k][]+1
+  end
+
+  return neighbors
+end
+
+function Graphs.edges(g::VNGraph)
+  edge_list = Graphs.edgetype(g)[]
+  for i in 1:nnodes(g)
+    degree = g.ptr.d[][i]
+    c_neighbors_ptr = g.ptr.a[][i]
+
+    for k in 1:degree
+      j = c_neighbors_ptr[k][]+1
+      if i < j
+        push!(edge_list, Graphs.SimpleEdge{Cuint}(i, j))
+      end
+    end
+  end
+
+  return edge_list
+end
+
 Base.eltype(::VNGraph) = Cuint
 Base.zero(::Type{VNGraph}) = VNGraph(0)
-# Graphs.edges # TODO
 Graphs.edgetype(g::VNGraph) = Graphs.SimpleGraphs.SimpleEdge{eltype(g)}
-Graphs.has_edge(g::VNGraph,s,d) = graph_has_edge(g,s,d)
+Graphs.has_edge(g::VNGraph,s,d)::Bool = graph_has_edge(g,s-1,d-1)
 Graphs.has_vertex(g::VNGraph,n::Integer) = 1≤n≤nnodes(g)
-# Graphs.inneighbors # TODO
+Graphs.inneighbors(g::VNGraph, v::Integer) = Graphs.outneighbors(g, v)
 Graphs.is_directed(::Type{VNGraph}) = false
 Graphs.ne(g::VNGraph) = nedges(g)
 Graphs.nv(g::VNGraph) = nnodes(g)
-# Graphs.outneighbors # TODO
-Graphs.vertices(g::VNGraph) = 1:nnodes(g)
+Graphs.vertices(g::VNGraph)::UnitRange{Cuint} = 1:nnodes(g)
 
 Graphs.add_edge!(g::VNGraph, e::Graphs.SimpleGraphEdge) = graph_add_edge(g,e.src-1,e.dst-1)
 
