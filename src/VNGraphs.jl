@@ -1,6 +1,6 @@
 module VNGraphs
 
-export VNGraph
+export VNGraph, VNAlgorithm, chromatic_number, edge_chromatic_number, clique_number
 
 import Graphs
 
@@ -190,6 +190,92 @@ function Base.copy(g::VNGraph)
         end
     end
     return g2
+end
+
+# --- VNAlgorithm dispatch ---
+
+"""
+    VNAlgorithm
+
+Algorithm dispatch type for very_nauty C library implementations.
+Pass `VNAlgorithm()` as a second argument to dispatch graph algorithms
+to the very_nauty C implementation. Non-VNGraph inputs are automatically
+converted.
+
+# Example
+```julia
+g = path_graph(5)
+is_connected(g, VNAlgorithm())      # uses very_nauty C implementation
+chromatic_number(g, VNAlgorithm())   # exact chromatic number via very_nauty
+```
+"""
+struct VNAlgorithm end
+
+# Helper: convert to VNGraph if needed
+_to_vngraph(g::VNGraph) = g
+_to_vngraph(g::Graphs.AbstractSimpleGraph) = VNGraph(g)
+
+"""
+    Graphs.is_connected(g::AbstractGraph, ::VNAlgorithm)
+
+Test whether `g` is connected using the very_nauty C library.
+"""
+function Graphs.is_connected(g::Graphs.AbstractGraph, ::VNAlgorithm)
+    vng = _to_vngraph(g)
+    return graph_connected(vng) != 0
+end
+
+"""
+    Graphs.connected_components(g::AbstractGraph, ::VNAlgorithm)
+
+Return the connected components of `g` using the very_nauty C library.
+Returns a vector of vectors, where each inner vector contains the 1-based
+vertex indices of one component.
+"""
+function Graphs.connected_components(g::Graphs.AbstractGraph, ::VNAlgorithm)
+    vng = _to_vngraph(g)
+    nc = graph_nclusters(vng)
+    n = nnodes(vng)
+    components = [Int[] for _ in 1:nc]
+    for i in Cuint(1):Cuint(n)
+        label = cluster(vng, i) + 1  # 0-based C label → 1-based
+        push!(components[label], Int(i))
+    end
+    return components
+end
+
+"""
+    chromatic_number(g::AbstractGraph, ::VNAlgorithm; timeout=0)
+
+Compute the exact chromatic number of `g` using the very_nauty C library.
+`timeout` specifies CPU clock ticks before giving up (0 = no timeout).
+"""
+function chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0)
+    vng = _to_vngraph(g)
+    return Int(graph_chromatic_number(vng, timeout))
+end
+
+"""
+    edge_chromatic_number(g::AbstractGraph, ::VNAlgorithm; timeout=0)
+
+Compute the exact edge chromatic number (chromatic index) of `g`
+using the very_nauty C library.
+`timeout` specifies CPU clock ticks before giving up (0 = no timeout).
+"""
+function edge_chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0)
+    vng = _to_vngraph(g)
+    return Int(graph_edge_chromatic_number(vng, timeout))
+end
+
+"""
+    clique_number(g::AbstractGraph, ::VNAlgorithm)
+
+Compute the exact clique number (size of the maximum clique) of `g`
+using the very_nauty C library.
+"""
+function clique_number(g::Graphs.AbstractGraph, ::VNAlgorithm)
+    vng = _to_vngraph(g)
+    return Int(graph_clique_number(vng))
 end
 
 end
