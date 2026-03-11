@@ -105,17 +105,91 @@ end
 
 Base.eltype(::VNGraph) = Cuint
 Base.zero(::Type{VNGraph}) = VNGraph(0)
-# Graphs.edges # TODO
-Graphs.edgetype(g::VNGraph) = Graphs.SimpleGraphs.SimpleEdge{eltype(g)}
-Graphs.has_edge(g::VNGraph,s,d) = graph_has_edge(g,s,d)
-Graphs.has_vertex(g::VNGraph,n::Integer) = 1≤n≤nnodes(g)
-# Graphs.inneighbors # TODO
+Graphs.edgetype(::VNGraph) = Graphs.SimpleGraphs.SimpleEdge{Cuint}
 Graphs.is_directed(::Type{VNGraph}) = false
 Graphs.ne(g::VNGraph) = nedges(g)
 Graphs.nv(g::VNGraph) = nnodes(g)
-# Graphs.outneighbors # TODO
-Graphs.vertices(g::VNGraph) = 1:nnodes(g)
+Graphs.vertices(g::VNGraph)::UnitRange{Cuint} = Cuint(1):Cuint(nnodes(g))
 
-Graphs.add_edge!(g::VNGraph, e::Graphs.SimpleGraphEdge) = graph_add_edge(g,e.src-1,e.dst-1)
+# Fix: convert 1-based Julia indices to 0-based C indices
+Graphs.has_edge(g::VNGraph, s, d)::Bool = graph_has_edge(g, s-1, d-1)
+Graphs.has_vertex(g::VNGraph, n::Integer) = 1 ≤ n ≤ nnodes(g)
+
+function Graphs.outneighbors(g::VNGraph, v::Integer)
+    (1 ≤ v ≤ nnodes(g)) || return Cuint[]
+    deg = g.ptr.d[][v]
+    neighbors = Vector{Cuint}(undef, deg)
+    adj = g.ptr.a[][v]
+    for k in 1:deg
+        neighbors[k] = adj[k][] + Cuint(1)  # 0-based C → 1-based Julia
+    end
+    sort!(neighbors)
+    return neighbors
+end
+
+Graphs.inneighbors(g::VNGraph, v::Integer) = Graphs.outneighbors(g, v)
+
+"""Iterator over edges of a VNGraph, yielding SimpleEdge{Cuint}."""
+struct VNGraphEdgeIterator
+    graph::VNGraph
+end
+
+Base.length(it::VNGraphEdgeIterator) = nedges(it.graph)
+Base.eltype(::Type{VNGraphEdgeIterator}) = Graphs.SimpleGraphs.SimpleEdge{Cuint}
+
+function Base.iterate(it::VNGraphEdgeIterator, state=(Cuint(1), 1))
+    g = it.graph
+    n = nnodes(g)
+    v, kidx = state
+    while v ≤ n
+        deg = g.ptr.d[][v]
+        adj = g.ptr.a[][v]
+        while kidx ≤ deg
+            w = adj[kidx][] + Cuint(1)
+            kidx += 1
+            if v < w  # undirected: emit each edge once (lower index first)
+                return (Graphs.SimpleGraphs.SimpleEdge{Cuint}(v, w), (v, kidx))
+            end
+        end
+        v += Cuint(1)
+        kidx = 1
+    end
+    return nothing
+end
+
+Graphs.edges(g::VNGraph) = VNGraphEdgeIterator(g)
+
+function Graphs.add_edge!(g::VNGraph, e::Graphs.SimpleGraphEdge)
+    s, d = e.src - 1, e.dst - 1
+    graph_add_edge(g, s, d)
+    return Graphs.has_edge(g, e.src, e.dst)
+end
+
+function Graphs.rem_edge!(g::VNGraph, e::Graphs.SimpleGraphEdge)
+    s, d = e.src - 1, e.dst - 1
+    result = graph_del_edge(g, s, d)
+    return result != 0
+end
+
+function Graphs.add_vertex!(g::VNGraph)
+    graph_add_node(g)
+    return true
+end
+
+function Base.copy(g::VNGraph)
+    n = nnodes(g)
+    g2 = VNGraph(n)
+    for i in Cuint(1):Cuint(n)
+        deg = g.ptr.d[][i]
+        adj = g.ptr.a[][i]
+        for k in 1:deg
+            j = adj[k][] + Cuint(1)
+            if i < j
+                graph_add_edge(g2, i - 1, j - 1)
+            end
+        end
+    end
+    return g2
+end
 
 end
