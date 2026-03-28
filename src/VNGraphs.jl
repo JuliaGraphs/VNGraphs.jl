@@ -84,14 +84,16 @@ graph_check_coloring(g::VNGraph) = c"graph_check_coloring"(g.ptr)
 
 function Graphs.SimpleGraphs.SimpleGraph(vng::VNGraph)
     n = nnodes(vng)
-    g = Graphs.SimpleGraphs.SimpleGraph{Int}(n)
-    for i in 1:nnodes(vng)
-        for k in 1:vng.ptr.d[][i]
-            j = vng.ptr.a[][i][k]+1
-            i<j && Graphs.add_edge!(g,i,j)
+    # Build fadjlist directly for speed
+    fadjlist = [Vector{Int}(undef, vng.ptr.d[][i-1]) for i in 1:n]
+    for i in 1:n
+        d = vng.ptr.d[][i-1]
+        for k in 1:d
+            fadjlist[i][k] = vng.ptr.a[][i-1][k-1] + 1
         end
+        sort!(fadjlist[i])
     end
-    return g
+    return Graphs.SimpleGraphs.SimpleGraph{Int}(nedges(vng), fadjlist)
 end
 
 function VNGraph(g::Graphs.AbstractSimpleGraph)
@@ -105,17 +107,104 @@ end
 
 Base.eltype(::VNGraph) = Cuint
 Base.zero(::Type{VNGraph}) = VNGraph(0)
-# Graphs.edges # TODO
+
+struct VNEdgeIterator
+    g::VNGraph
+end
+Base.eltype(::Type{VNEdgeIterator}) = Graphs.SimpleGraphs.SimpleEdge{Cuint}
+Base.length(it::VNEdgeIterator) = Int(nedges(it.g))
+
+function Base.iterate(it::VNEdgeIterator, state=(1, 1))
+    g = it.g
+    i, k = state
+    n = nnodes(g)
+    
+    while i <= n
+        d = g.ptr.d[][i-1]
+        while k <= d
+            j = g.ptr.a[][i-1][k-1] + 1
+            if i < j
+                return (Graphs.SimpleGraphs.SimpleEdge{Cuint}(i, j), (i, k + 1))
+            end
+            k += 1
+        end
+        i += 1
+        k = 1
+    end
+    return nothing
+end
+
+Graphs.edges(g::VNGraph) = VNEdgeIterator(g)
 Graphs.edgetype(g::VNGraph) = Graphs.SimpleGraphs.SimpleEdge{eltype(g)}
-Graphs.has_edge(g::VNGraph,s,d) = graph_has_edge(g,s,d)
-Graphs.has_vertex(g::VNGraph,n::Integer) = 1≤n≤nnodes(g)
-# Graphs.inneighbors # TODO
+
+function Graphs.has_edge(g::VNGraph, s::Integer, d::Integer)
+    (s < 1 || s > nnodes(g) || d < 1 || d > nnodes(g)) && return false
+    return graph_has_edge(g, s-1, d-1)
+end
+
+Graphs.has_vertex(g::VNGraph, n::Integer) = 1≤n≤nnodes(g)
+
+function Graphs.outneighbors(g::VNGraph, v::Integer)
+    (v < 1 || v > nnodes(g)) && return Cuint[]
+    d = g.ptr.d[][v-1]
+    return [g.ptr.a[][v-1][k-1] + 1 for k in 1:d]
+end
+
+Graphs.inneighbors(g::VNGraph, v::Integer) = Graphs.outneighbors(g, v)
+Graphs.neighbors(g::VNGraph, v::Integer) = Graphs.outneighbors(g, v)
+
 Graphs.is_directed(::Type{VNGraph}) = false
 Graphs.ne(g::VNGraph) = nedges(g)
 Graphs.nv(g::VNGraph) = nnodes(g)
-# Graphs.outneighbors # TODO
 Graphs.vertices(g::VNGraph) = 1:nnodes(g)
 
-Graphs.add_edge!(g::VNGraph, e::Graphs.SimpleGraphEdge) = graph_add_edge(g,e.src-1,e.dst-1)
+function Graphs.add_edge!(g::VNGraph, s::Integer, d::Integer)
+    (s < 1 || s > nnodes(g) || d < 1 || d > nnodes(g)) && return false
+    return graph_add_edge(g, s-1, d-1)
+end
+
+Graphs.add_edge!(g::VNGraph, e::Graphs.SimpleGraphEdge) = Graphs.add_edge!(g, e.src, e.dst)
+
+function Graphs.add_vertex!(g::VNGraph)
+    graph_add_node(g)
+    return true
+end
+
+function Graphs.rem_edge!(g::VNGraph, s::Integer, d::Integer)
+    (s < 1 || s > nnodes(g) || d < 1 || d > nnodes(g)) && return false
+    return graph_del_edge(g, s-1, d-1)
+end
+
+function Graphs.degree(g::VNGraph, v::Integer)
+    (v < 1 || v > nnodes(g)) && return 0
+    return Int(g.ptr.d[][v-1])
+end
+
+# Algorithm dispatch
+struct VNAlgorithm end
+export VNAlgorithm
+
+Graphs.clique_number(g::VNGraph) = graph_clique_number(g)
+Graphs.clique_number(g::Graphs.AbstractGraph, ::VNAlgorithm) = graph_clique_number(VNGraph(g))
+
+function Graphs.chromatic_number(g::VNGraph, timeout=0)
+    return graph_chromatic_number(g, timeout)
+end
+Graphs.chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = Graphs.chromatic_number(VNGraph(g), timeout)
+
+function Graphs.connected_components(g::VNGraph)
+    n = nnodes(g)
+    n_clusters = graph_nclusters(g)
+    comps = [Int[] for _ in 1:n_clusters]
+    for i in 1:n
+        c = cluster(g, i-1)
+        push!(comps[c+1], i)
+    end
+    return comps
+end
+Graphs.connected_components(g::Graphs.AbstractGraph, ::VNAlgorithm) = Graphs.connected_components(VNGraph(g))
+
+# Export VNAlgorithm for user convenience
+export VNAlgorithm
 
 end
