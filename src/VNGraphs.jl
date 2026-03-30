@@ -93,7 +93,7 @@ function Graphs.SimpleGraphs.SimpleGraph(vng::VNGraph)
         end
         sort!(fadjlist[i])
     end
-    return Graphs.SimpleGraphs.SimpleGraph{Int}(nedges(vng), fadjlist)
+    return Graphs.SimpleGraphs.SimpleGraph{Int}(Int(nedges(vng)), fadjlist)
 end
 
 function VNGraph(g::Graphs.AbstractSimpleGraph)
@@ -191,6 +191,11 @@ function Graphs.chromatic_number(g::VNGraph, timeout=0)
     return graph_chromatic_number(g, timeout)
 end
 Graphs.chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = Graphs.chromatic_number(VNGraph(g), timeout)
+
+function Graphs.edge_chromatic_number(g::VNGraph, timeout=0)
+    return graph_edge_chromatic_number(g, timeout)
+end
+Graphs.edge_chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = Graphs.edge_chromatic_number(VNGraph(g), timeout)
 
 function Graphs.connected_components(g::VNGraph)
     n = nnodes(g)

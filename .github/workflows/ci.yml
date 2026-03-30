@@ -43,6 +43,11 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
+      - name: Use Graphs.jl very_nauty branch
+        shell: julia --color=yes --project=. {0}
+        run: |
+          using Pkg
+          Pkg.add(url="https://github.com/mahmudsudo/Graphs.jl.git", rev="very_nauty")
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         env:
@@ -52,18 +57,4 @@ jobs:
         with:
           file: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-      - uses: julia-actions/cache@v2
-      - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-docdeploy@v1
-        env:
-          GKSwstype: nul # Fix for Plots with GR backend.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+
