@@ -20,3 +20,5 @@ jobs:
         with:
           julia-version: '1'
           tune: 'false'
+          script: benchmark/benchmarks.jl
+          extra-pkgs: https://github.com/mahmudsudo/Graphs.jl.git#very_nauty

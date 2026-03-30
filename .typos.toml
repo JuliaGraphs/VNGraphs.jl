@@ -1,0 +1,6 @@
+# .typos.toml
+[default]
+extend-ignore-re = [
+    "(?i)very_nauty_jll",
+    "(?i)vngraph",
+]
