@@ -3,6 +3,7 @@ module VNGraphs
 export VNGraph
 
 import Graphs
+import Graphs: clique_number, chromatic_number, edge_chromatic_number
 
 import very_nauty_jll
 using CBinding: @c_cmd, @c_str
@@ -212,21 +213,21 @@ end
 struct VNAlgorithm end
 export VNAlgorithm
 
-Graphs.clique_number(g::VNGraph) = graph_clique_number(g)
-Graphs.clique_number(g::VNGraph, ::VNAlgorithm) = Graphs.clique_number(g)
-Graphs.clique_number(g::Graphs.AbstractGraph, ::VNAlgorithm) = graph_clique_number(VNGraph(g))
+clique_number(g::VNGraph) = graph_clique_number(g)
+clique_number(g::VNGraph, ::VNAlgorithm) = clique_number(g)
+clique_number(g::Graphs.AbstractGraph, ::VNAlgorithm) = graph_clique_number(VNGraph(g))
 
-function Graphs.chromatic_number(g::VNGraph; timeout=0)
+function chromatic_number(g::VNGraph; timeout=0)
     return graph_chromatic_number(g, timeout)
 end
-Graphs.chromatic_number(g::VNGraph, ::VNAlgorithm; timeout=0) = Graphs.chromatic_number(g; timeout=timeout)
-Graphs.chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = Graphs.chromatic_number(VNGraph(g); timeout=timeout)
+chromatic_number(g::VNGraph, ::VNAlgorithm; timeout=0) = chromatic_number(g; timeout=timeout)
+chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = chromatic_number(VNGraph(g); timeout=timeout)
 
-function Graphs.edge_chromatic_number(g::VNGraph; timeout=0)
+function edge_chromatic_number(g::VNGraph; timeout=0)
     return graph_edge_chromatic_number(g, timeout)
 end
-Graphs.edge_chromatic_number(g::VNGraph, ::VNAlgorithm; timeout=0) = Graphs.edge_chromatic_number(g; timeout=timeout)
-Graphs.edge_chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = Graphs.edge_chromatic_number(VNGraph(g); timeout=timeout)
+edge_chromatic_number(g::VNGraph, ::VNAlgorithm; timeout=0) = edge_chromatic_number(g; timeout=timeout)
+edge_chromatic_number(g::Graphs.AbstractGraph, ::VNAlgorithm; timeout=0) = edge_chromatic_number(VNGraph(g); timeout=timeout)
 
 function Graphs.connected_components(g::VNGraph)
     n = nnodes(g)

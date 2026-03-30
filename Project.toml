@@ -16,9 +16,10 @@ JET = "c3a54625-ed41-48e0-a4ff-191f74bb3f5d"
 StableRNGs = "860ef19b-820b-49d6-a0d0-8fbd23ad0ade"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestItemRunner = "f8b46487-219e-4ad5-845a-35d30081ef61"
+BenchmarkTools = "6e4b44f1-6d23-5a04-9844-338276f71052"
 
 [targets]
-test = ["Aqua", "GraphsInterfaceChecker", "Interfaces", "JET", "StableRNGs", "Test", "TestItemRunner"]
+test = ["Aqua", "GraphsInterfaceChecker", "Interfaces", "JET", "StableRNGs", "Test", "TestItemRunner", "BenchmarkTools"]
 
 [compat]
 Aqua = "0.8"
@@ -32,3 +33,4 @@ Test = "1"
 TestItemRunner = "1"
 julia = "1.10"
 very_nauty_jll = "1.1.2"
+BenchmarkTools = "1.5.0"
