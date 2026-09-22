@@ -1,0 +1,22 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: '1'
+          tune: 'false'
+          job-summary: 'true'
