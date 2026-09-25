@@ -4,91 +4,80 @@ export VNGraph
 
 import Graphs
 
-import very_nauty_jll
-using CBinding: @c_cmd, @c_str
-let
-    incdir = joinpath(very_nauty_jll.artifact_dir, "include")
-    libdir = dirname(very_nauty_jll.libvn_graph_path)
-
-    SYSROOT = Sys.isapple() ? ["-isysroot", joinpath(strip(String(read(`xcrun xcode-select --print-path`))), "Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk")] : []
-
-    c`$([SYSROOT..., "-I$(incdir)", "-L$(libdir)", "-lvn_graph"])`
-end
-
-# TODO document why these consts have to be included manually
-const c"size_t" = Csize_t
-const c"clock_t" = Cuint # TODO this is not safe, but it is too much of a hassle to get the correct clock_t on windows as a bunch of internal types start getting parsed
-const c"FILE" = Cvoid # fine as long as we do not use it
-
-c"""
-#include "vn_graph.h"
-"""
+include("libvery_nauty.jl")
 
 """Thin wrapper around the graph structure provided by the `very_nauty` C graph library."""
 mutable struct VNGraph <: Graphs.SimpleGraphs.AbstractSimpleGraph{Cuint}
-    ptr::c"graph_t"
-    function VNGraph(ptr::c"graph_t")
+    ptr::Lib.graph_t
+    function VNGraph(ptr::Lib.graph_t)
         x = new(ptr)
         finalizer(x) do x
-            c"graph_clear"(x.ptr)
+            Lib.graph_clear(x.ptr)
             x
         end
     end
 end
 
-VNGraph(n::Integer) = VNGraph(c"graph_new"(n))
+# Keep the owning graph alive while a C function uses its pointer.
+Base.cconvert(::Type{Lib.graph_t}, g::VNGraph) = g
+Base.unsafe_convert(::Type{Lib.graph_t}, g::VNGraph) = g.ptr
 
-graph_add_edge(g::VNGraph,i::Integer,j::Integer) = c"graph_add_edge"(g.ptr,i,j)
-graph_del_edge(g::VNGraph,i::Integer,j::Integer) = c"graph_del_edge"(g.ptr,i,j)
-graph_has_edge(g::VNGraph,i::Integer,j::Integer) = c"graph_has_edge"(g.ptr,i,j)
-graph_add_node(g::VNGraph) = c"graph_add_node"(g.ptr)
-nnodes(g::VNGraph) = g.ptr.nnodes[] # c"nnodes"(g.ptr)
-nedges(g::VNGraph) = g.ptr.nedges[] # c"nedges"(g.ptr)
+VNGraph(n::Integer) = VNGraph(Lib.graph_new(n))
 
-graph_node_degree(g::VNGraph, i::Integer) = c"graph_node_degree"(g.ptr, i)
-graph_min_degree(g::VNGraph) = c"graph_min_degree"(g.ptr)
-graph_max_degree(g::VNGraph) = c"graph_max_degree"(g.ptr)
-graph_mean_degree(g::VNGraph) = c"graph_mean_degree"(g.ptr)
+graph_add_edge(g::VNGraph,i::Integer,j::Integer) = Lib.graph_add_edge(g,i,j)
+graph_del_edge(g::VNGraph,i::Integer,j::Integer) = Lib.graph_del_edge(g,i,j)
+graph_has_edge(g::VNGraph,i::Integer,j::Integer) = Lib.graph_has_edge(g,i,j)
+graph_add_node(g::VNGraph) = Lib.graph_add_node(g)
+nnodes(g::VNGraph) = GC.@preserve g unsafe_load(g.ptr).nnodes
+nedges(g::VNGraph) = GC.@preserve g unsafe_load(g.ptr).nedges
 
-graph_show(g::VNGraph) = c"graph_show"(g.ptr)
+graph_node_degree(g::VNGraph, i::Integer) = Lib.graph_node_degree(g, i)
+graph_min_degree(g::VNGraph) = Lib.graph_min_degree(g)
+graph_max_degree(g::VNGraph) = Lib.graph_max_degree(g)
+graph_mean_degree(g::VNGraph) = Lib.graph_mean_degree(g)
 
-graph_nclusters(g::VNGraph) = c"graph_nclusters"(g.ptr)
-graph_connected(g::VNGraph) = c"graph_connected"(g.ptr)
+graph_show(g::VNGraph) = Lib.graph_show(g)
 
-cluster(g::VNGraph,i::Integer) = g.ptr.l[][i]
-graph_cluster_sizes(g::VNGraph) = c"graph_cluster_sizes"(g.ptr)
-graph_max_cluster(g::VNGraph) = c"graph_max_cluster"(g.ptr)
+graph_nclusters(g::VNGraph) = Lib.graph_nclusters(g)
+graph_connected(g::VNGraph) = Lib.graph_connected(g)
 
-graph_gnp(g::VNGraph, p) = c"graph_gnp"(g.ptr, p)
-graph_gnm(g::VNGraph, m) = c"graph_gnm"(g.ptr, m)
-graph_grg(g::VNGraph, r) = c"graph_grg"(g.ptr, r)
-graph_grg_torus(g::VNGraph, r) = c"graph_grg_torus"(g.ptr, r)
-graph_lognormal_grg_torus(g::VNGraph, r, alpha) = c"graph_lognormal_grg_torus"(g.ptr, r, alpha)
+cluster(g::VNGraph,i::Integer) = GC.@preserve g unsafe_load(unsafe_load(g.ptr).l, i)
+graph_cluster_sizes(g::VNGraph) = Lib.graph_cluster_sizes(g)
+graph_max_cluster(g::VNGraph) = Lib.graph_max_cluster(g)
+
+graph_gnp(g::VNGraph, p) = iszero(p) ? Lib.graph_empty(g) : Lib.graph_gnp(g, p)
+graph_gnm(g::VNGraph, m) = Lib.graph_gnm(g, m)
+graph_grg(g::VNGraph, r) = Lib.graph_grg(g, r)
+graph_grg_torus(g::VNGraph, r) = Lib.graph_grg_torus(g, r)
+graph_lognormal_grg_torus(g::VNGraph, r, alpha) = Lib.graph_lognormal_grg_torus(g, r, alpha)
 
 # TODO random iterators
 
-graph_clique_number(g::VNGraph) = c"graph_clique_number"(g.ptr)
+graph_clique_number(g::VNGraph) = Lib.graph_clique_number(g)
 
-graph_local_complement(g::VNGraph, i::Integer) = c"graph_local_complement"(g.ptr,i)
+graph_local_complement(g::VNGraph, i::Integer) = Lib.graph_local_complement(g,i)
 
 # TODO greedy and sequential color
 #graph_greedy_color(graph_t g, int perm[])
 #graph_sequential_color(graph_t g,int perm[], int ub)
-graph_sequential_color_repeat(g::VNGraph, n::Integer) = c"graph_sequential_color_repeat"(g.ptr, n)
-graph_chromatic_number(g::VNGraph, timeout) = c"graph_chromatic_number"(g.ptr, timeout)
-graph_edge_chromatic_number(g::VNGraph, timeout) = c"graph_edge_chromatic_number"(g.ptr, timeout)
-color(g::VNGraph,i) = g.ptr.c[][i]
-graph_ncolors(g::VNGraph) = c"graph_ncolors"(g.ptr)
-graph_check_coloring(g::VNGraph) = c"graph_check_coloring"(g.ptr)
+graph_sequential_color_repeat(g::VNGraph, n::Integer) = Lib.graph_sequential_color_repeat(g, n)
+graph_chromatic_number(g::VNGraph, timeout) = Lib.graph_chromatic_number(g, timeout)
+graph_edge_chromatic_number(g::VNGraph, timeout) = Lib.graph_edge_chromatic_number(g, timeout)
+color(g::VNGraph,i) = GC.@preserve g unsafe_load(unsafe_load(g.ptr).c, i)
+graph_ncolors(g::VNGraph) = Lib.graph_ncolors(g)
+graph_check_coloring(g::VNGraph) = Lib.graph_check_coloring(g)
 
 
 function Graphs.SimpleGraphs.SimpleGraph(vng::VNGraph)
     n = nnodes(vng)
     g = Graphs.SimpleGraphs.SimpleGraph{Int}(n)
-    for i in 1:nnodes(vng)
-        for k in 1:vng.ptr.d[][i]
-            j = vng.ptr.a[][i][k]+1
-            i<j && Graphs.add_edge!(g,i,j)
+    GC.@preserve vng begin
+        data = unsafe_load(vng.ptr)
+        for i in 1:n
+            for k in 1:unsafe_load(data.d, i)
+                j = unsafe_load(unsafe_load(data.a, i), k)+1
+                i<j && Graphs.add_edge!(g,i,j)
+            end
         end
     end
     return g
